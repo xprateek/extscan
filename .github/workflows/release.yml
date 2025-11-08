@@ -1,0 +1,186 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      # macOS dependencies and targets
+      - name: Install macOS dependencies and targets
+        if: matrix.os == 'macos-latest'
+        run: |
+          sudo xcode-select --install || true
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin || true
+
+      # Linux x86_64 Rust target
+      - name: Install Rust target (Linux x86_64)
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu'
+        run: rustup target add x86_64-unknown-linux-gnu
+
+      # Linux ARM64: cross linker + Rust target
+      - name: Install cross linker and Rust target (Linux ARM64)
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          rustup target add aarch64-unknown-linux-gnu
+
+      # Windows MSVC targets install
+      - name: Install Rust targets (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+
+      # Build Linux ARM64 with cross linker
+      - name: Build Linux ARM64 binary
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+          cargo build --release --target ${{ matrix.target }}
+
+      # Build all other targets normally
+      - name: Build other binaries
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu') }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # Upload Windows artifacts (.exe)
+      - name: Upload artifact for Windows targets
+        if: startsWith(matrix.target, 'x86_64-pc-windows-msvc') || startsWith(matrix.target, 'aarch64-pc-windows-msvc')
+        uses: actions/upload-artifact@v4
+        with:
+          name: extscan-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/extscan.exe
+
+      # Upload Unix artifacts (no .exe)
+      - name: Upload artifact for Unix targets
+        if: ${{ !startsWith(matrix.target, 'x86_64-pc-windows-msvc') && !startsWith(matrix.target, 'aarch64-pc-windows-msvc') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: extscan-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/extscan
+
+  create_release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extscan-x86_64-unknown-linux-gnu
+          path: release-artifacts/x86_64-unknown-linux-gnu
+
+      - name: Download Linux aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extscan-aarch64-unknown-linux-gnu
+          path: release-artifacts/aarch64-unknown-linux-gnu
+
+      - name: Download macOS x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extscan-x86_64-apple-darwin
+          path: release-artifacts/x86_64-apple-darwin
+
+      - name: Download macOS aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extscan-aarch64-apple-darwin
+          path: release-artifacts/aarch64-apple-darwin
+
+      - name: Download Windows x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extscan-x86_64-pc-windows-msvc
+          path: release-artifacts/x86_64-pc-windows-msvc
+
+      - name: Download Windows aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extscan-aarch64-pc-windows-msvc
+          path: release-artifacts/aarch64-pc-windows-msvc
+
+      # Rename Linux x86_64 artifact
+      - name: Rename Linux x86_64 artifact
+        run: |
+          mkdir -p release-artifacts/x86_64-unknown-linux-gnu
+          cp release-artifacts/x86_64-unknown-linux-gnu/extscan release-artifacts/x86_64-unknown-linux-gnu/extscan-x86_64-unknown-linux-gnu
+        shell: bash
+
+      # Rename Linux aarch64 artifact
+      - name: Rename Linux aarch64 artifact
+        run: |
+          mkdir -p release-artifacts/aarch64-unknown-linux-gnu
+          cp release-artifacts/aarch64-unknown-linux-gnu/extscan release-artifacts/aarch64-unknown-linux-gnu/extscan-aarch64-unknown-linux-gnu
+        shell: bash
+
+      # Rename macOS x86_64 artifact
+      - name: Rename macOS x86_64 artifact
+        run: |
+          mkdir -p release-artifacts/x86_64-apple-darwin
+          cp release-artifacts/x86_64-apple-darwin/extscan release-artifacts/x86_64-apple-darwin/extscan-x86_64-apple-darwin
+        shell: bash
+
+      # Rename macOS aarch64 artifact
+      - name: Rename macOS aarch64 artifact
+        run: |
+          mkdir -p release-artifacts/aarch64-apple-darwin
+          cp release-artifacts/aarch64-apple-darwin/extscan release-artifacts/aarch64-apple-darwin/extscan-aarch64-apple-darwin
+        shell: bash
+
+      # Rename Windows x86_64 artifact
+      - name: Rename Windows x86_64 artifact
+        run: |
+          mkdir -p release-artifacts/x86_64-pc-windows-msvc
+          cp release-artifacts/x86_64-pc-windows-msvc/extscan.exe release-artifacts/x86_64-pc-windows-msvc/extscan-x86_64-pc-windows-msvc.exe
+        shell: bash
+
+      # Rename Windows aarch64 artifact
+      - name: Rename Windows aarch64 artifact
+        run: |
+          mkdir -p release-artifacts/aarch64-pc-windows-msvc
+          cp release-artifacts/aarch64-pc-windows-msvc/extscan.exe release-artifacts/aarch64-pc-windows-msvc/extscan-aarch64-pc-windows-msvc.exe
+        shell: bash
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-artifacts/x86_64-unknown-linux-gnu/extscan-x86_64-unknown-linux-gnu
+            release-artifacts/aarch64-unknown-linux-gnu/extscan-aarch64-unknown-linux-gnu
+            release-artifacts/x86_64-apple-darwin/extscan-x86_64-apple-darwin
+            release-artifacts/aarch64-apple-darwin/extscan-aarch64-apple-darwin
+            release-artifacts/x86_64-pc-windows-msvc/extscan-x86_64-pc-windows-msvc.exe
+            release-artifacts/aarch64-pc-windows-msvc/extscan-aarch64-pc-windows-msvc.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
