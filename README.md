@@ -52,6 +52,8 @@ extscan [OPTIONS] [path]
 
 ![Terminal macOS screenshot](https://raw.githubusercontent.com/xprateek/extscan/refs/heads/main/screenshot/terminal_macos.png)
 
+![Terminal macOS Screen Recording](https://raw.githubusercontent.com/xprateek/extscan/refs/heads/main/screenshot/Screen-Recording_macOS-terminal.mov)
+
 ***
 
 ## Examples
