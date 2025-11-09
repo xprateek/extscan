@@ -52,11 +52,6 @@ extscan [OPTIONS] [path]
 
 ![Terminal macOS screenshot](https://raw.githubusercontent.com/xprateek/extscan/refs/heads/main/screenshot/terminal_macos.png)
 
-<video width="600" controls>
-  <source src="screenshot/Screen-Recording_macOS-terminal.mov" type="video/quicktime">
-  Your browser does not support the video tag.
-</video>
-
 ***
 
 ## Examples
